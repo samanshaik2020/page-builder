@@ -1,5 +1,7 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { createClientComponentClient } from "@/lib/supabase"
+import { nanoid } from "nanoid" // Used for unique ID generation, add it to package.json if not present.
 
 export interface ElementData {
   id: string
@@ -25,22 +27,29 @@ export interface ElementData {
 }
 
 export interface ProjectData {
-  templateId: string
+  id: string // Supabase UUID
+  user_id: string // Supabase auth user ID
+  title: string
+  slug: string
   elements: Record<string, ElementData>
-  lastModified: number
+  is_published: boolean
+  created_at: string
+  updated_at: string
 }
 
 interface EditorStore {
-  currentTemplateId: string | null
+  currentProjectId: string | null
+  currentUserId: string | null // New state to store current user ID
   elements: Record<string, ElementData>
   selectedElementId: string | null
   showElementsPanel: boolean
   showSectionsPanel: boolean
   draggedElement: ElementData | null
-  insertionTargetId: string | null // New state for precise insertion
+  insertionTargetId: string | null
+  initialLoadComplete: boolean // To track initial loading of user/project
 
   // Actions
-  setCurrentTemplate: (templateId: string) => void
+  setCurrentProject: (projectId: string, userId: string | null) => void
   setElements: (elements: Record<string, ElementData>) => void
   addElement: (element: ElementData, explicitTargetId?: string) => void
   updateElement: (id: string, updates: Partial<ElementData>) => void
@@ -49,15 +58,23 @@ interface EditorStore {
   toggleElementsPanel: () => void
   toggleSectionsPanel: () => void
   setDraggedElement: (element: ElementData | null) => void
-  setInsertionTarget: (id: string | null) => void // New action
+  setInsertionTarget: (id: string | null) => void
+  setInitialLoadComplete: (status: boolean) => void // New action
 
-  // Save/Load/Reset
-  saveProject: () => void
-  loadProject: (templateId: string) => boolean
+  // Supabase interactions
+  saveProject: () => Promise<void>
+  loadProject: (projectId: string) => Promise<boolean>
   resetToOriginal: () => void
+  publishProject: (projectId: string, isPublished: boolean) => Promise<void>
+  createNewProject: (
+    title: string,
+    initialElements: Record<string, ElementData>,
+    userId: string,
+  ) => Promise<ProjectData | null>
+  hasUnsavedChanges: () => boolean
 }
 
-const generateId = () => Math.random().toString(36).substr(2, 9)
+const generateId = () => nanoid(9) // Using nanoid for shorter, unique IDs
 
 // Template 1: Modern Landing Page
 const template1Elements: Record<string, ElementData> = {
@@ -1662,6 +1679,282 @@ const personalPortfolioElements: Record<string, ElementData> = {
   },
 }
 
+// New Template: Professional Landing Page
+const professionalLandingPageElements: Record<string, ElementData> = {
+  root: {
+    id: "root",
+    type: "container",
+    styles: { backgroundColor: "#ffffff", padding: [0, 0, 0, 0], margin: [0, 0, 0, 0], xPosition: 0, yPosition: 0 },
+    children: ["pro-hero", "pro-features", "pro-testimonials", "pro-cta"],
+  },
+  "pro-hero": {
+    id: "pro-hero",
+    type: "container",
+    styles: {
+      backgroundColor: "#f0f4f8", // Light blue-gray
+      padding: [120, 40, 120, 40],
+      textAlign: "center",
+      margin: [0, 0, 20, 0],
+      xPosition: 0,
+      yPosition: 0,
+    },
+    children: ["pro-hero-title", "pro-hero-subtitle", "pro-hero-button"],
+  },
+  "pro-hero-title": {
+    id: "pro-hero-title",
+    type: "text",
+    content: "Elevate Your Online Presence",
+    styles: {
+      fontSize: 60,
+      fontWeight: 800,
+      color: "#1a202c", // Dark gray
+      textAlign: "center",
+      margin: [0, 0, 24, 0],
+      xPosition: 0,
+      yPosition: 0,
+    },
+  },
+  "pro-hero-subtitle": {
+    id: "pro-hero-subtitle",
+    type: "text",
+    content: "Craft stunning, high-converting landing pages with ease. No coding required.",
+    styles: { fontSize: 24, color: "#4a5568", textAlign: "center", margin: [0, 0, 48, 0], xPosition: 0, yPosition: 0 },
+  },
+  "pro-hero-button": {
+    id: "pro-hero-button",
+    type: "button",
+    content: "Start Building Now",
+    href: "#",
+    styles: {
+      backgroundColor: "#38b2ac", // Teal
+      color: "#ffffff",
+      fontSize: 20,
+      padding: [18, 40, 18, 40],
+      borderRadius: 8,
+      xPosition: 0,
+      yPosition: 0,
+    },
+  },
+  "pro-features": {
+    id: "pro-features",
+    type: "container",
+    styles: {
+      backgroundColor: "#ffffff",
+      padding: [100, 40, 100, 40],
+      margin: [0, 0, 20, 0],
+      xPosition: 0,
+      yPosition: 0,
+    },
+    children: ["pro-features-title", "pro-feature1", "pro-feature2", "pro-feature3"],
+  },
+  "pro-features-title": {
+    id: "pro-features-title",
+    type: "text",
+    content: "Powerful Features at Your Fingertips",
+    styles: {
+      fontSize: 48,
+      fontWeight: 700,
+      color: "#1a202c",
+      textAlign: "center",
+      margin: [0, 0, 60, 0],
+      xPosition: 0,
+      yPosition: 0,
+    },
+  },
+  "pro-feature1": {
+    id: "pro-feature1",
+    type: "container",
+    styles: {
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 15,
+      padding: [20, 20, 20, 20],
+      margin: [0, 0, 30, 0],
+      xPosition: 0,
+      yPosition: 0,
+    },
+    children: ["pro-feature1-icon", "pro-feature1-title", "pro-feature1-description"],
+  },
+  "pro-feature1-icon": {
+    id: "pro-feature1-icon",
+    type: "text",
+    content: "✨",
+    styles: { fontSize: 48, margin: [0, 0, 0, 0], xPosition: 0, yPosition: 0 },
+  },
+  "pro-feature1-title": {
+    id: "pro-feature1-title",
+    type: "text",
+    content: "Intuitive Drag & Drop",
+    styles: { fontSize: 28, fontWeight: 600, color: "#2d3748", margin: [0, 0, 0, 0], xPosition: 0, yPosition: 0 },
+  },
+  "pro-feature1-description": {
+    id: "pro-feature1-description",
+    type: "text",
+    content: "Easily arrange elements and sections to create your perfect layout.",
+    styles: { fontSize: 18, color: "#4a5568", textAlign: "center", margin: [0, 0, 0, 0], xPosition: 0, yPosition: 0 },
+  },
+  "pro-feature2": {
+    id: "pro-feature2",
+    type: "container",
+    styles: {
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 15,
+      padding: [20, 20, 20, 20],
+      margin: [0, 0, 30, 0],
+      xPosition: 0,
+      yPosition: 0,
+    },
+    children: ["pro-feature2-icon", "pro-feature2-title", "pro-feature2-description"],
+  },
+  "pro-feature2-icon": {
+    id: "pro-feature2-icon",
+    type: "text",
+    content: "🚀",
+    styles: { fontSize: 48, margin: [0, 0, 0, 0], xPosition: 0, yPosition: 0 },
+  },
+  "pro-feature2-title": {
+    id: "pro-feature2-title",
+    type: "text",
+    content: "Blazing Fast Performance",
+    styles: { fontSize: 28, fontWeight: 600, color: "#2d3748", margin: [0, 0, 0, 0], xPosition: 0, yPosition: 0 },
+  },
+  "pro-feature2-description": {
+    id: "pro-feature2-description",
+    type: "text",
+    content: "Your pages load instantly, ensuring a smooth experience for your visitors.",
+    styles: { fontSize: 18, color: "#4a5568", textAlign: "center", margin: [0, 0, 0, 0], xPosition: 0, yPosition: 0 },
+  },
+  "pro-feature3": {
+    id: "pro-feature3",
+    type: "container",
+    styles: {
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 15,
+      padding: [20, 20, 20, 20],
+      margin: [0, 0, 0, 0],
+      xPosition: 0,
+      yPosition: 0,
+    },
+    children: ["pro-feature3-icon", "pro-feature3-title", "pro-feature3-description"],
+  },
+  "pro-feature3-icon": {
+    id: "pro-feature3-icon",
+    type: "text",
+    content: "📈",
+    styles: { fontSize: 48, margin: [0, 0, 0, 0], xPosition: 0, yPosition: 0 },
+  },
+  "pro-feature3-title": {
+    id: "pro-feature3-title",
+    type: "text",
+    content: "Conversion Optimized",
+    styles: { fontSize: 28, fontWeight: 600, color: "#2d3748", margin: [0, 0, 0, 0], xPosition: 0, yPosition: 0 },
+  },
+  "pro-feature3-description": {
+    id: "pro-feature3-description",
+    type: "text",
+    content: "Designed to help you turn visitors into loyal customers.",
+    styles: { fontSize: 18, color: "#4a5568", textAlign: "center", margin: [0, 0, 0, 0], xPosition: 0, yPosition: 0 },
+  },
+  "pro-testimonials": {
+    id: "pro-testimonials",
+    type: "container",
+    styles: {
+      backgroundColor: "#f7fafc", // Lighter gray
+      padding: [100, 40, 100, 40],
+      textAlign: "center",
+      margin: [0, 0, 20, 0],
+      xPosition: 0,
+      yPosition: 0,
+    },
+    children: ["pro-testimonials-title", "pro-testimonial-quote", "pro-testimonial-author"],
+  },
+  "pro-testimonials-title": {
+    id: "pro-testimonials-title",
+    type: "text",
+    content: "What Our Users Say",
+    styles: {
+      fontSize: 48,
+      fontWeight: 700,
+      color: "#1a202c",
+      textAlign: "center",
+      margin: [0, 0, 60, 0],
+      xPosition: 0,
+      yPosition: 0,
+    },
+  },
+  "pro-testimonial-quote": {
+    id: "pro-testimonial-quote",
+    type: "text",
+    content:
+      '"This platform has revolutionized our marketing efforts. The ease of use and powerful features are unmatched!"',
+    styles: {
+      fontSize: 28,
+      fontWeight: 500,
+      color: "#2d3748",
+      textAlign: "center",
+      margin: [0, 0, 24, 0],
+      xPosition: 0,
+      yPosition: 0,
+    },
+  },
+  "pro-testimonial-author": {
+    id: "pro-testimonial-author",
+    type: "text",
+    content: "— Jane Doe, Marketing Director at InnovateCo",
+    styles: { fontSize: 18, color: "#4a5568", textAlign: "center", margin: [0, 0, 0, 0], xPosition: 0, yPosition: 0 },
+  },
+  "pro-cta": {
+    id: "pro-cta",
+    type: "container",
+    styles: {
+      backgroundColor: "#38b2ac", // Teal
+      padding: [100, 40, 100, 40],
+      textAlign: "center",
+      margin: [0, 0, 0, 0],
+      xPosition: 0,
+      yPosition: 0,
+    },
+    children: ["pro-cta-title", "pro-cta-subtitle", "pro-cta-button"],
+  },
+  "pro-cta-title": {
+    id: "pro-cta-title",
+    type: "text",
+    content: "Ready to Build Your Dream Page?",
+    styles: {
+      fontSize: 48,
+      fontWeight: 700,
+      color: "#ffffff",
+      textAlign: "center",
+      margin: [0, 0, 24, 0],
+      xPosition: 0,
+      yPosition: 0,
+    },
+  },
+  "pro-cta-subtitle": {
+    id: "pro-cta-subtitle",
+    type: "text",
+    content: "Join thousands of satisfied users and start creating beautiful pages today.",
+    styles: { fontSize: 22, color: "#e6fffa", textAlign: "center", margin: [0, 0, 48, 0], xPosition: 0, yPosition: 0 },
+  },
+  "pro-cta-button": {
+    id: "pro-cta-button",
+    type: "button",
+    content: "Get Started Free",
+    href: "#",
+    styles: {
+      backgroundColor: "#ffffff",
+      color: "#38b2ac",
+      fontSize: 20,
+      padding: [18, 40, 18, 40],
+      borderRadius: 8,
+      xPosition: 0,
+      yPosition: 0,
+    },
+  },
+}
+
 // Template selector function
 const getTemplateElements = (templateId: string): Record<string, ElementData> => {
   switch (templateId) {
@@ -1677,6 +1970,8 @@ const getTemplateElements = (templateId: string): Record<string, ElementData> =>
       return simpleLandingPageElements
     case "personal-portfolio":
       return personalPortfolioElements
+    case "professional-landing-page": // Add the new template here
+      return professionalLandingPageElements
     default:
       return template1Elements
   }
@@ -1685,16 +1980,18 @@ const getTemplateElements = (templateId: string): Record<string, ElementData> =>
 export const useEditorStore = create<EditorStore>()(
   persist(
     (set, get) => ({
-      currentTemplateId: null,
+      currentProjectId: null,
+      currentUserId: null,
       elements: {},
       selectedElementId: null,
       showElementsPanel: false,
       showSectionsPanel: false,
       draggedElement: null,
-      insertionTargetId: null, // Initialize new state
+      insertionTargetId: null,
+      initialLoadComplete: false,
 
-      setCurrentTemplate: (templateId) => {
-        set({ currentTemplateId: templateId })
+      setCurrentProject: (projectId, userId) => {
+        set({ currentProjectId: projectId, currentUserId: userId })
       },
 
       setElements: (elements) => {
@@ -1705,25 +2002,19 @@ export const useEditorStore = create<EditorStore>()(
         set((state) => {
           const newElements = { ...state.elements }
 
-          // Ensure the element has an ID
           if (!element.id) {
             element.id = generateId()
           }
 
-          // Add the new element to the elements object
           newElements[element.id] = { ...element }
 
-          // Determine the actual parent and insertion point
-          let actualParentId = "root" // Default to root
-          let insertIndex = -1 // Default to append
+          let actualParentId = "root"
+          let insertIndex = -1
 
           const targetId = explicitTargetId || state.insertionTargetId || state.selectedElementId
           const targetElement = targetId ? newElements[targetId] : null
 
           if (state.insertionTargetId) {
-            // Case 1: Insertion via "Add Section Here" button (inserting a sibling section)
-            // The insertionTargetId is the sibling element we want to insert AFTER.
-            // We need to find its parent (which should be 'root' for top-level sections).
             const parentOfInsertionTarget = Object.keys(newElements).find((key) =>
               newElements[key].children?.includes(state.insertionTargetId!),
             )
@@ -1732,16 +2023,12 @@ export const useEditorStore = create<EditorStore>()(
               const parentChildren = newElements[actualParentId].children || []
               insertIndex = parentChildren.indexOf(state.insertionTargetId!) + 1
             } else {
-              // Fallback if parent not found (shouldn't happen for root children)
               actualParentId = "root"
             }
           } else if (state.selectedElementId) {
-            // Case 2: Insertion via Elements/Sections panel with an element selected
             if (targetElement && targetElement.type === "container") {
-              // If selected element is a container, add as a child
               actualParentId = state.selectedElementId
             } else {
-              // If selected element is not a container, add as a sibling after it
               const parentOfSelected = Object.keys(newElements).find((key) =>
                 newElements[key].children?.includes(state.selectedElementId!),
               )
@@ -1750,15 +2037,13 @@ export const useEditorStore = create<EditorStore>()(
                 const parentChildren = newElements[actualParentId].children || []
                 insertIndex = parentChildren.indexOf(state.selectedElementId!) + 1
               } else {
-                actualParentId = "root" // Fallback
+                actualParentId = "root"
               }
             }
           } else {
-            // Case 3: No specific target, append to root
             actualParentId = "root"
           }
 
-          // Perform the insertion
           const parentToModify = newElements[actualParentId]
           if (parentToModify) {
             const currentChildren = parentToModify.children ? [...parentToModify.children] : []
@@ -1778,7 +2063,7 @@ export const useEditorStore = create<EditorStore>()(
           return {
             elements: newElements,
             selectedElementId: element.id,
-            insertionTargetId: null, // Reset after use
+            insertionTargetId: null,
           }
         })
       },
@@ -1804,7 +2089,6 @@ export const useEditorStore = create<EditorStore>()(
           const newElements = { ...state.elements }
           delete newElements[id]
 
-          // Remove from parent's children
           Object.keys(newElements).forEach((parentId) => {
             if (newElements[parentId].children) {
               newElements[parentId] = {
@@ -1829,7 +2113,7 @@ export const useEditorStore = create<EditorStore>()(
         set((state) => ({
           showElementsPanel: !state.showElementsPanel,
           showSectionsPanel: false,
-          insertionTargetId: null, // Clear insertion target when opening elements panel
+          insertionTargetId: null,
         }))
       },
 
@@ -1848,88 +2132,180 @@ export const useEditorStore = create<EditorStore>()(
         set({ insertionTargetId: id })
       },
 
-      saveProject: () => {
+      setInitialLoadComplete: (status) => {
+        set({ initialLoadComplete: status })
+      },
+
+      hasUnsavedChanges: () => {
+        // This becomes more complex with DB persistence. For now, we'll
+        // consider a change whenever an element is updated or added/deleted.
+        // A more robust solution would involve comparing current state with
+        // a 'last saved' state or tracking a dirty flag.
+        return true // Simplistic: always assume changes are possible
+      },
+
+      createNewProject: async (title, initialElements, userId) => {
+        const supabase = createClientComponentClient()
+        const slug =
+          title
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-|-$/g, "") +
+          "-" +
+          nanoid(6)
+
+        const { data, error } = await supabase
+          .from("pages")
+          .insert({
+            user_id: userId,
+            title: title,
+            slug: slug,
+            elements: initialElements,
+            is_published: false, // Default to not published
+          })
+          .select()
+          .single()
+
+        if (error) {
+          console.error("Error creating new project:", error)
+          return null
+        }
+
+        if (data) {
+          set({
+            currentProjectId: data.id,
+            currentUserId: userId,
+            elements: data.elements,
+            selectedElementId: null,
+            initialLoadComplete: true,
+          })
+          return data as ProjectData
+        }
+        return null
+      },
+
+      saveProject: async () => {
         const state = get()
-        if (!state.currentTemplateId) return
-
-        const projectData: ProjectData = {
-          templateId: state.currentTemplateId,
-          elements: state.elements,
-          lastModified: Date.now(),
+        if (!state.currentProjectId || !state.currentUserId) {
+          console.error("Cannot save project: No current project or user ID.")
+          return
         }
 
-        localStorage.setItem(`litebuilder_project_${state.currentTemplateId}`, JSON.stringify(projectData))
+        const supabase = createClientComponentClient()
 
-        const savedProjects = JSON.parse(localStorage.getItem("litebuilder_saved_projects") || "[]")
-        const existingIndex = savedProjects.findIndex((p: any) => p.templateId === state.currentTemplateId)
+        const { data, error } = await supabase
+          .from("pages")
+          .update({
+            elements: state.elements,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", state.currentProjectId)
+          .eq("user_id", state.currentUserId) // Ensure user owns the project
 
-        const projectSummary = {
-          templateId: state.currentTemplateId,
-          lastModified: Date.now(),
-          title: `Landing Page ${state.currentTemplateId}`,
-        }
-
-        if (existingIndex >= 0) {
-          savedProjects[existingIndex] = projectSummary
+        if (error) {
+          console.error("Error saving project:", error)
         } else {
-          savedProjects.push(projectSummary)
-        }
-
-        localStorage.setItem("litebuilder_saved_projects", JSON.stringify(savedProjects))
-      },
-
-      loadProject: (templateId) => {
-        const savedData = localStorage.getItem(`litebuilder_project_${templateId}`)
-
-        if (!savedData) {
-          // No saved project, load the default template
-          const templateElements = getTemplateElements(templateId)
-          set({
-            currentTemplateId: templateId,
-            elements: templateElements,
-            selectedElementId: null,
-          })
-          return false
-        }
-
-        try {
-          const projectData: ProjectData = JSON.parse(savedData)
-          set({
-            currentTemplateId: projectData.templateId,
-            elements: projectData.elements,
-            selectedElementId: null,
-          })
-          return true
-        } catch (error) {
-          console.error("Failed to load project:", error)
-          // Fallback to default template on error
-          const templateElements = getTemplateElements(templateId)
-          set({
-            currentTemplateId: templateId,
-            elements: templateElements,
-            selectedElementId: null,
-          })
-          return false
+          console.log("Project saved successfully.")
         }
       },
 
-      resetToOriginal: () => {
+      loadProject: async (projectId) => {
+        const supabase = createClientComponentClient()
+        const { data, error } = await supabase.from("pages").select("*").eq("id", projectId).single()
+
+        if (error || !data) {
+          console.error("Error loading project or project not found:", error)
+          set({ initialLoadComplete: true }) // Mark load as complete even if failed
+          return false
+        }
+
+        set({
+          currentProjectId: data.id,
+          currentUserId: data.user_id,
+          elements: data.elements,
+          selectedElementId: null,
+          initialLoadComplete: true,
+        })
+        return true
+      },
+
+      resetToOriginal: async () => {
         const state = get()
-        if (state.currentTemplateId) {
-          const templateElements = getTemplateElements(state.currentTemplateId)
+        if (!state.currentProjectId) return
+
+        // Fetch the original template elements based on the initial project's template type if available,
+        // or a default empty state if not. For now, we don't store the "template type" in DB,
+        // so we'll just revert to a basic template or load a fresh one if possible.
+        // A more complex solution would save the initial template ID with the project.
+        // For simplicity, let's reset to a generic default or an empty canvas.
+        // Let's assume we want to reset to the first template's elements.
+        const defaultTemplateId = "template1"
+        const originalElements = getTemplateElements(defaultTemplateId)
+
+        const supabase = createClientComponentClient()
+        const { error } = await supabase
+          .from("pages")
+          .update({
+            elements: originalElements,
+            updated_at: new Date().toISOString(),
+            // You might also want to reset is_published here if it was changed
+          })
+          .eq("id", state.currentProjectId)
+          .eq("user_id", state.currentUserId)
+
+        if (error) {
+          console.error("Error resetting project:", error)
+        } else {
           set({
-            elements: templateElements,
+            elements: originalElements,
             selectedElementId: null,
           })
+          console.log("Project reset to original state.")
+        }
+      },
+
+      publishProject: async (projectId, isPublished) => {
+        const supabase = createClientComponentClient()
+        const { data, error } = await supabase
+          .from("pages")
+          .update({ is_published: isPublished, updated_at: new Date().toISOString() })
+          .eq("id", projectId)
+          .select()
+          .single()
+
+        if (error) {
+          console.error("Error updating publish status:", error)
+        } else if (data) {
+          set((state) => ({
+            elements: {
+              ...state.elements,
+              // Update root element or a specific indicator if needed in the UI
+            },
+          }))
+          console.log("Publish status updated:", data)
         }
       },
     }),
     {
       name: "litebuilder-editor",
+      // Exclude functions and non-serializable parts
       partialize: (state) => ({
-        currentTemplateId: state.currentTemplateId,
+        currentProjectId: state.currentProjectId,
         elements: state.elements,
+        selectedElementId: state.selectedElementId,
+        showElementsPanel: state.showElementsPanel,
+        showSectionsPanel: state.showSectionsPanel,
+        draggedElement: state.draggedElement,
+        insertionTargetId: state.insertionTargetId,
+        currentUserId: state.currentUserId,
+        initialLoadComplete: state.initialLoadComplete,
       }),
+      // Migrate to prevent data issues when changing schema
+      version: 1, // Increment version if schema changes to invalidate old local storage
+      onRehydrateStorage: (state) => {
+        console.log("rehydrating storage", state)
+        // You can add logic here to handle migrations if needed
+      },
     },
   ),
 )

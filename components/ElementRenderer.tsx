@@ -2,18 +2,19 @@
 
 import React from "react"
 
-import { useEditorStore } from "@/lib/store"
+import { useEditorStore, type ElementData } from "@/lib/store"
 import { useState } from "react"
-import { AddSectionButton } from "./AddSectionButton" // Import the new component
+import { AddSectionButton } from "./AddSectionButton"
 
 interface ElementRendererProps {
   elementId: string
+  elements: Record<string, ElementData> // Add elements prop
   isEditing?: boolean
 }
 
-export function ElementRenderer({ elementId, isEditing = true }: ElementRendererProps) {
-  const { elements, selectedElementId, setSelectedElement, updateElement } = useEditorStore()
-  const element = elements[elementId]
+export function ElementRenderer({ elementId, elements, isEditing = true }: ElementRendererProps) {
+  const { selectedElementId, setSelectedElement, updateElement } = useEditorStore() // keep zustand for editing
+  const element = elements[elementId] // Use prop elements here
   const [isEditing_, setIsEditing] = useState(false)
 
   if (!element) return null
@@ -169,8 +170,8 @@ export function ElementRenderer({ elementId, isEditing = true }: ElementRenderer
               {elementId === "root" && isEditing && <AddSectionButton insertAfterElementId={null} />}
               {element.children.map((childId) => (
                 <React.Fragment key={childId}>
-                  <ElementRenderer elementId={childId} isEditing={isEditing} />
-                  {/* Render AddSectionButton after each top-level child of the root container */}
+                  <ElementRenderer elementId={childId} elements={elements} isEditing={isEditing} />{" "}
+                  {/* Pass elements prop */}
                   {elementId === "root" && isEditing && <AddSectionButton insertAfterElementId={childId} />}
                 </React.Fragment>
               ))}
