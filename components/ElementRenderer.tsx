@@ -59,6 +59,11 @@ export function ElementRenderer({ elementId, isEditing = true }: ElementRenderer
     width: styles.width ? `${styles.width}px` : undefined,
     height: styles.height ? `${styles.height}px` : undefined,
     textAlign: styles.textAlign,
+    // Apply transform for x and y offsets, keeping elements in normal flow
+    transform:
+      styles.xPosition !== undefined || styles.yPosition !== undefined
+        ? `translateX(${styles.xPosition || 0}px) translateY(${styles.yPosition || 0}px)`
+        : undefined,
   }
 
   switch (element.type) {
@@ -154,6 +159,7 @@ export function ElementRenderer({ elementId, isEditing = true }: ElementRenderer
             display: "block",
             minHeight: "50px",
             border: isSelected && isEditing ? "2px dashed #3b82f6" : "none",
+            // Removed position: "relative" as it's not needed for flow layout
           }}
           onClick={handleClick}
         >

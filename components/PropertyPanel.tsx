@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { Slider } from "@/components/ui/slider" // Import Slider component
 import { Type, MousePointer, ImageIcon, Box, Trash2 } from "lucide-react"
 
 export function PropertyPanel() {
@@ -258,6 +259,52 @@ export function PropertyPanel() {
               </div>
             </>
           )}
+
+          {/* Position */}
+          <div className="space-y-2">
+            <Label htmlFor="xPosition" className="text-sm">
+              X Position (px)
+            </Label>
+            <div className="flex items-center gap-2">
+              <Slider
+                id="xPosition"
+                min={-500}
+                max={500}
+                step={1}
+                value={[element.styles?.xPosition || 0]}
+                onValueChange={(value) => handleStyleChange("xPosition", value[0])}
+                className="flex-1"
+              />
+              <Input
+                type="number"
+                value={element.styles?.xPosition || 0}
+                onChange={(e) => handleStyleChange("xPosition", Number.parseInt(e.target.value) || 0)}
+                className="w-20"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="yPosition" className="text-sm">
+              Y Position (px)
+            </Label>
+            <div className="flex items-center gap-2">
+              <Slider
+                id="yPosition"
+                min={-500}
+                max={500}
+                step={1}
+                value={[element.styles?.yPosition || 0]}
+                onValueChange={(value) => handleStyleChange("yPosition", value[0])}
+                className="flex-1"
+              />
+              <Input
+                type="number"
+                value={element.styles?.yPosition || 0}
+                onChange={(e) => handleStyleChange("yPosition", Number.parseInt(e.target.value) || 0)}
+                className="w-20"
+              />
+            </div>
+          </div>
         </div>
 
         <Separator />
