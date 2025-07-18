@@ -13,6 +13,7 @@ import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { Toaster } from "@/components/ui/toaster"
 import { PreviewModal } from "@/components/PreviewModal"
+import { EmailCollectionDialog } from "@/components/EmailCollectionDialog" // Import the new component
 
 function EditorContent() {
   const searchParams = useSearchParams()
@@ -57,14 +58,11 @@ function EditorContent() {
           <PreviewModal />
         </div>
       </header>
-
       {/* Fixed Toolbar */}
       <Toolbar />
-
       {/* Floating Panels */}
       <ElementsPanel />
       <SectionsPanel />
-
       {/* Main Content Area */}
       <div className="flex pt-20 min-h-screen">
         {/* Scrollable Canvas Area */}
@@ -85,8 +83,8 @@ function EditorContent() {
           </div>
         </div>
       </div>
-
       <Toaster />
+      <EmailCollectionDialog /> {/* Render the email collection dialog */}
     </div>
   )
 }
