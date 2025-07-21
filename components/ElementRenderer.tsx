@@ -29,7 +29,7 @@ export function ElementRenderer({ elementId, isEditing = true }: ElementRenderer
   }
 
   const handleDoubleClick = (e: any) => {
-    if (isEditing && (element.type === "text" || element.type === "button")) {
+    if (isEditing && (element.type === "text" || element.type === "button" || element.type === "paragraph")) {
       e.stopPropagation()
       setIsEditing(true)
     }
@@ -47,6 +47,7 @@ export function ElementRenderer({ elementId, isEditing = true }: ElementRenderer
   const elementStyle: any = {
     fontSize: styles.fontSize ? `${styles.fontSize}px` : undefined,
     fontWeight: styles.fontWeight,
+    fontFamily: styles.fontFamily,
     color: styles.color,
     backgroundColor: styles.backgroundColor,
     padding: styles.padding
@@ -137,6 +138,47 @@ export function ElementRenderer({ elementId, isEditing = true }: ElementRenderer
             element.content || "Click me"
           )}
         </button>
+      )
+
+    case "paragraph":
+      return (
+        <div
+          className={`${baseClasses} block`}
+          style={elementStyle}
+          onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
+        >
+          {isEditing_ ? (
+            <textarea
+              autoFocus
+              value={element.content || ""}
+              onChange={(e) => handleContentChange(e.target.value)}
+              onBlur={() => setIsEditing(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && e.ctrlKey) {
+                  handleContentChange((e.target as any).value)
+                }
+              }}
+              style={{
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: "inherit",
+                fontSize: "inherit",
+                fontWeight: "inherit",
+                textAlign: "inherit",
+                width: "100%",
+                minHeight: "60px",
+                resize: "vertical",
+                fontFamily: "inherit",
+              }}
+            />
+          ) : (
+            <div style={{ whiteSpace: "pre-wrap" }}>
+              {element.content || "Click to edit paragraph"}
+            </div>
+          )}
+        </div>
       )
 
     case "image":

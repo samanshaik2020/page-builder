@@ -62,6 +62,8 @@ export function PropertyPanel() {
     switch (element.type) {
       case "text":
         return <Type className="h-4 w-4" />
+      case "paragraph":
+        return <Type className="h-4 w-4" />
       case "button":
         return <MousePointer className="h-4 w-4" />
       case "image":
@@ -91,6 +93,21 @@ export function PropertyPanel() {
               value={element.content || ""}
               onChange={(e) => handleContentChange(e.target.value)}
               placeholder="Enter text content"
+            />
+          </div>
+        )}
+
+        {/* Paragraph content editing */}
+        {element.type === "paragraph" && (
+          <div className="space-y-2">
+            <Label htmlFor="paragraph-content">Paragraph Content</Label>
+            <textarea
+              id="paragraph-content"
+              value={element.content || ""}
+              onChange={(e) => handleContentChange(e.target.value)}
+              placeholder="Enter paragraph content"
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              rows={4}
             />
           </div>
         )}
@@ -174,7 +191,7 @@ export function PropertyPanel() {
           )}
 
           {/* Font size */}
-          {(element.type === "text" || element.type === "button") && (
+          {(element.type === "text" || element.type === "button" || element.type === "paragraph") && (
             <div className="space-y-2">
               <Label htmlFor="fontSize" className="text-sm">
                 Font Size
@@ -187,6 +204,54 @@ export function PropertyPanel() {
                 min="8"
                 max="72"
               />
+            </div>
+          )}
+
+          {/* Font weight (style) for paragraphs */}
+          {element.type === "paragraph" && (
+            <div className="space-y-2">
+              <Label htmlFor="fontWeight" className="text-sm">
+                Font Weight
+              </Label>
+              <select
+                id="fontWeight"
+                value={element.styles?.fontWeight || 400}
+                onChange={(e) => handleStyleChange("fontWeight", Number.parseInt(e.target.value))}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value={300}>Light</option>
+                <option value={400}>Normal</option>
+                <option value={500}>Medium</option>
+                <option value={600}>Semi Bold</option>
+                <option value={700}>Bold</option>
+                <option value={800}>Extra Bold</option>
+              </select>
+            </div>
+          )}
+
+          {/* Font family for paragraphs */}
+          {element.type === "paragraph" && (
+            <div className="space-y-2">
+              <Label htmlFor="fontFamily" className="text-sm">
+                Font Family
+              </Label>
+              <select
+                id="fontFamily"
+                value={element.styles?.fontFamily || "inherit"}
+                onChange={(e) => handleStyleChange("fontFamily", e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="inherit">Default</option>
+                <option value="Arial, sans-serif">Arial</option>
+                <option value="'Times New Roman', serif">Times New Roman</option>
+                <option value="'Courier New', monospace">Courier New</option>
+                <option value="Georgia, serif">Georgia</option>
+                <option value="Verdana, sans-serif">Verdana</option>
+                <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+                <option value="'Comic Sans MS', cursive">Comic Sans MS</option>
+                <option value="Impact, sans-serif">Impact</option>
+                <option value="'Lucida Console', monospace">Lucida Console</option>
+              </select>
             </div>
           )}
 

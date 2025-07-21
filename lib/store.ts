@@ -1,9 +1,11 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { databaseService } from './database'
+import type { LandingPage } from './supabase'
 
 export interface ElementData {
   id: string
-  type: "text" | "button" | "image" | "container"
+  type: "text" | "button" | "image" | "container" | "paragraph"
   content?: string
   imageUrl?: string
   styles: {
@@ -16,9 +18,15 @@ export interface ElementData {
     borderRadius?: number
     width?: number
     height?: number
+    minHeight?: number
     textAlign?: "left" | "center" | "right"
     xPosition?: number
     yPosition?: number
+    flexDirection?: "row" | "column"
+    objectFit?: "contain" | "cover" | "fill" | "none" | "scale-down"
+    alignItems?: "flex-start" | "flex-end" | "center" | "stretch" | "baseline"
+    gap?: number
+    fontFamily?: string
   }
   href?: string
   children?: string[]
@@ -32,15 +40,19 @@ export interface ProjectData {
 
 interface EditorStore {
   currentTemplateId: string | null
+  currentPageId: string | null // New: current Supabase page ID
   elements: Record<string, ElementData>
   selectedElementId: string | null
   showElementsPanel: boolean
   showSectionsPanel: boolean
   draggedElement: ElementData | null
   insertionTargetId: string | null // New state for precise insertion
+  currentPage: LandingPage | null // New: current page data
+  saving: boolean // New: saving state
 
   // Actions
   setCurrentTemplate: (templateId: string) => void
+  setCurrentPage: (page: LandingPage | null) => void // New
   setElements: (elements: Record<string, ElementData>) => void
   addElement: (element: ElementData, explicitTargetId?: string) => void
   updateElement: (id: string, updates: Partial<ElementData>) => void
@@ -51,9 +63,11 @@ interface EditorStore {
   setDraggedElement: (element: ElementData | null) => void
   setInsertionTarget: (id: string | null) => void // New action
 
-  // Save/Load/Reset
-  saveProject: () => void
+  // Save/Load/Reset - Updated for Supabase
+  saveProject: () => Promise<void>
   loadProject: (templateId: string) => boolean
+  loadPageFromSupabase: (pageId: string) => Promise<boolean> // New
+  savePageToSupabase: () => Promise<boolean> // New
   resetToOriginal: () => void
 }
 
@@ -156,6 +170,7 @@ const template1Elements: Record<string, ElementData> = {
   },
   "features-text": {
     id: "features-text",
+    type: "text",
     content:
       "Our platform provides everything you need to create professional landing pages that convert visitors into customers.",
     styles: {
@@ -1331,6 +1346,7 @@ const simpleLandingPageElements: Record<string, ElementData> = {
   },
   "lp-social-proof-text": {
     id: "lp-social-proof-text",
+    type: "text",
     content: "Trusted by over 5,000 happy customers worldwide!",
     styles: {
       fontSize: 20,
@@ -1663,7 +1679,7 @@ const personalPortfolioElements: Record<string, ElementData> = {
 }
 
 // Template selector function
-const getTemplateElements = (templateId: string): Record<string, ElementData> => {
+export const getTemplateElements = (templateId: string): Record<string, ElementData> => {
   switch (templateId) {
     case "template1":
       return template1Elements
@@ -1682,19 +1698,77 @@ const getTemplateElements = (templateId: string): Record<string, ElementData> =>
   }
 }
 
+// Template metadata
+export interface TemplateInfo {
+  id: string
+  name: string
+  description: string
+  category: string
+}
+
+export const getAvailableTemplates = (): TemplateInfo[] => [
+  {
+    id: "template1",
+    name: "Modern Landing Page",
+    description: "Clean and professional design perfect for businesses",
+    category: "business"
+  },
+  {
+    id: "template2",
+    name: "SaaS Product Page",
+    description: "Perfect for software and SaaS products",
+    category: "business"
+  },
+  {
+    id: "template3",
+    name: "Creative Agency",
+    description: "Showcase your creative work and services",
+    category: "portfolio"
+  },
+  {
+    id: "product-template",
+    name: "Product Launch",
+    description: "Ideal for product launches and e-commerce",
+    category: "ecommerce"
+  },
+  {
+    id: "simple-landing-page",
+    name: "LiteBuilder Simple",
+    description: "Lightweight and fast-loading template",
+    category: "other"
+  },
+  {
+    id: "personal-portfolio",
+    name: "Personal Portfolio",
+    description: "Perfect for showcasing personal projects and skills",
+    category: "portfolio"
+  }
+]
+
 export const useEditorStore = create<EditorStore>()(
   persist(
     (set, get) => ({
       currentTemplateId: null,
+      currentPageId: null,
       elements: {},
       selectedElementId: null,
       showElementsPanel: false,
       showSectionsPanel: false,
       draggedElement: null,
-      insertionTargetId: null, // Initialize new state
+      insertionTargetId: null,
+      currentPage: null,
+      saving: false, // Initialize new state
 
       setCurrentTemplate: (templateId) => {
         set({ currentTemplateId: templateId })
+      },
+
+      setCurrentPage: (page) => {
+        set({ 
+          currentPage: page,
+          currentPageId: page?.id || null,
+          currentTemplateId: page?.template_id || null
+        })
       },
 
       setElements: (elements) => {
@@ -1848,8 +1922,16 @@ export const useEditorStore = create<EditorStore>()(
         set({ insertionTargetId: id })
       },
 
-      saveProject: () => {
+      saveProject: async () => {
         const state = get()
+        
+        // If we have a current page ID, save to Supabase
+        if (state.currentPageId) {
+          await get().savePageToSupabase()
+          return
+        }
+        
+        // Otherwise, save to localStorage (legacy behavior)
         if (!state.currentTemplateId) return
 
         const projectData: ProjectData = {
@@ -1876,6 +1958,62 @@ export const useEditorStore = create<EditorStore>()(
         }
 
         localStorage.setItem("litebuilder_saved_projects", JSON.stringify(savedProjects))
+      },
+
+      loadPageFromSupabase: async (pageId: string) => {
+        try {
+          const { landingPage, error } = await databaseService.getLandingPage(pageId)
+          
+          if (error || !landingPage) {
+            console.error('Error loading page from Supabase:', error)
+            return false
+          }
+
+          set({
+            currentPage: landingPage,
+            currentPageId: landingPage.id,
+            currentTemplateId: landingPage.template_id,
+            elements: landingPage.elements_data || {},
+            selectedElementId: null,
+          })
+          
+          return true
+        } catch (error) {
+          console.error('Error loading page from Supabase:', error)
+          return false
+        }
+      },
+
+      savePageToSupabase: async () => {
+        const state = get()
+        if (!state.currentPageId) return false
+
+        set({ saving: true })
+        
+        try {
+          const { landingPage, error } = await databaseService.updateLandingPage(
+            state.currentPageId,
+            {
+              elements_data: state.elements
+            }
+          )
+
+          if (error) {
+            console.error('Error saving page to Supabase:', error)
+            return false
+          }
+
+          if (landingPage) {
+            set({ currentPage: landingPage })
+          }
+          
+          return true
+        } catch (error) {
+          console.error('Error saving page to Supabase:', error)
+          return false
+        } finally {
+          set({ saving: false })
+        }
       },
 
       loadProject: (templateId) => {
