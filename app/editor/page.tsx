@@ -14,7 +14,6 @@ import { ArrowLeft, Save, Eye } from "lucide-react"
 import Link from "next/link"
 import { Toaster } from "@/components/ui/toaster"
 import { PreviewModal } from "@/components/PreviewModal"
-import { EmailCollectionDialog } from "@/components/EmailCollectionDialog"
 import { useToast } from "@/components/ui/use-toast"
 
 function EditorContent() {
@@ -33,8 +32,6 @@ function EditorContent() {
     currentPage,
     saving 
   } = useEditorStore()
-  const [showEmailDialog, setShowEmailDialog] = useState(false)
-  const [pageCreated, setPageCreated] = useState(false)
   const [loading, setLoading] = useState(true)
 
   // Authentication check
@@ -83,16 +80,7 @@ function EditorContent() {
     loadPageData()
   }, [pageId, templateId, user, loadPageFromSupabase, setCurrentTemplate, loadProject, router, toast])
 
-  // Monitor when elements are added to trigger the popup
-  useEffect(() => {
-    const elementCount = Object.keys(elements).length
-    
-    // If we have more than the default template elements, consider it "page created"
-    if (elementCount > 10 && !pageCreated) { // Assuming default templates have ~10 elements
-      setPageCreated(true)
-      setShowEmailDialog(true)
-    }
-  }, [elements, pageCreated])
+
 
   const handleSave = async () => {
     if (pageId) {
@@ -201,10 +189,6 @@ function EditorContent() {
         </div>
       </div>
       <Toaster />
-      <EmailCollectionDialog 
-        shouldShow={showEmailDialog} 
-        onClose={() => setShowEmailDialog(false)} 
-      /> {/* Render the email collection dialog */}
     </div>
   )
 }
