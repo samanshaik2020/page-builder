@@ -49,6 +49,7 @@ interface EditorStore {
   insertionTargetId: string | null // New state for precise insertion
   currentPage: LandingPage | null // New: current page data
   saving: boolean // New: saving state
+  copiedElement: ElementData | null // New: copied element for paste functionality
 
   // Actions
   setCurrentTemplate: (templateId: string) => void
@@ -62,6 +63,8 @@ interface EditorStore {
   toggleSectionsPanel: () => void
   setDraggedElement: (element: ElementData | null) => void
   setInsertionTarget: (id: string | null) => void // New action
+  copyElement: (id: string) => void // New: copy element
+  pasteElement: (targetId?: string) => void // New: paste element
 
   // Save/Load/Reset - Updated for Supabase
   saveProject: () => Promise<void>
@@ -1758,6 +1761,7 @@ export const useEditorStore = create<EditorStore>()(
       insertionTargetId: null,
       currentPage: null,
       saving: false, // Initialize new state
+      copiedElement: null, // Initialize copied element state
 
       setCurrentTemplate: (templateId) => {
         set({ currentTemplateId: templateId })
@@ -1920,6 +1924,34 @@ export const useEditorStore = create<EditorStore>()(
 
       setInsertionTarget: (id) => {
         set({ insertionTargetId: id })
+      },
+
+      copyElement: (id) => {
+        const state = get()
+        const element = state.elements[id]
+        if (element && id !== 'root') {
+          // Create a deep copy of the element without children for now
+          const copiedElement: ElementData = {
+            ...element,
+            id: generateId(), // Generate new ID for the copy
+            children: element.children ? [...element.children] : undefined
+          }
+          set({ copiedElement })
+        }
+      },
+
+      pasteElement: (targetId) => {
+        const state = get()
+        if (!state.copiedElement) return
+        
+        // Create a new element with a unique ID
+        const newElement: ElementData = {
+          ...state.copiedElement,
+          id: generateId()
+        }
+        
+        // Add the element using existing addElement logic
+        get().addElement(newElement, targetId || state.selectedElementId || 'root')
       },
 
       saveProject: async () => {

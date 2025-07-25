@@ -7,10 +7,11 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Slider } from "@/components/ui/slider" // Import Slider component
-import { Type, MousePointer, ImageIcon, Box, Trash2 } from "lucide-react"
+import { ImageUpload } from "@/components/ImageUpload"
+import { Type, MousePointer, ImageIcon, Box, Trash2, Copy, Clipboard } from "lucide-react"
 
 export function PropertyPanel() {
-  const { selectedElementId, elements, updateElement, deleteElement, setSelectedElement } = useEditorStore()
+  const { selectedElementId, elements, updateElement, deleteElement, setSelectedElement, copyElement, pasteElement, copiedElement } = useEditorStore()
 
   if (!selectedElementId) {
     return (
@@ -58,6 +59,18 @@ export function PropertyPanel() {
     }
   }
 
+  const handleCopy = () => {
+    if (selectedElementId && selectedElementId !== "root") {
+      copyElement(selectedElementId)
+    }
+  }
+
+  const handlePaste = () => {
+    if (copiedElement) {
+      pasteElement(selectedElementId || "root")
+    }
+  }
+
   const getIcon = () => {
     switch (element.type) {
       case "text":
@@ -82,6 +95,29 @@ export function PropertyPanel() {
           {getIcon()}
           Edit {element.type.charAt(0).toUpperCase() + element.type.slice(1)}
         </CardTitle>
+        {/* Copy/Paste Actions */}
+        <div className="flex gap-2 mt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCopy}
+            disabled={selectedElementId === "root"}
+            className="flex items-center gap-1"
+          >
+            <Copy className="h-3 w-3" />
+            Copy
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePaste}
+            disabled={!copiedElement}
+            className="flex items-center gap-1"
+          >
+            <Clipboard className="h-3 w-3" />
+            Paste
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Content editing */}
@@ -112,17 +148,14 @@ export function PropertyPanel() {
           </div>
         )}
 
-        {/* Image URL editing */}
+        {/* Image URL editing with upload */}
         {element.type === "image" && (
-          <div className="space-y-2">
-            <Label htmlFor="imageUrl">Image URL</Label>
-            <Input
-              id="imageUrl"
-              value={element.imageUrl || ""}
-              onChange={(e) => handleImageUrlChange(e.target.value)}
-              placeholder="https://example.com/image.jpg"
-            />
-          </div>
+          <ImageUpload
+            value={element.imageUrl || ""}
+            onChange={handleImageUrlChange}
+            label="Image URL"
+            placeholder="https://example.com/image.jpg"
+          />
         )}
 
         {/* Button link editing */}
