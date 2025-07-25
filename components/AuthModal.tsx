@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/contexts/AuthContext'
 import { Loader2 } from 'lucide-react'
+import { EmailConfirmationPopup } from './EmailConfirmationPopup'
 
 interface AuthModalProps {
   isOpen: boolean
@@ -21,6 +22,7 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showEmailConfirmation, setShowEmailConfirmation] = useState(false)
   const { signIn, signUp } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -51,7 +53,9 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
         setError(`${error.message} (Code: ${error.status || 'unknown'})`)
       } else {
         if (mode === 'signup') {
-          setError('Account created successfully! You can now sign in.')
+          // Show confirmation popup instead of closing
+          console.log('Signup successful, showing email confirmation')
+          setShowEmailConfirmation(true)
         } else {
           onClose()
         }
@@ -77,7 +81,11 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <>
+      {/* Main auth dialog - only show when confirmation popup is not active */}
+      <Dialog open={isOpen && !showEmailConfirmation} onOpenChange={(open) => {
+        if (!open) onClose();
+      }}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>
@@ -159,5 +167,16 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
         </form>
       </DialogContent>
     </Dialog>
+      
+    {/* Email confirmation popup */}
+    <EmailConfirmationPopup 
+      isOpen={showEmailConfirmation} 
+      onClose={() => {
+        setShowEmailConfirmation(false)
+        onClose()
+      }} 
+      email={email}
+    />
+    </>
   )
 }

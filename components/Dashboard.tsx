@@ -14,6 +14,7 @@ import { Plus, Edit, Eye, Trash2, ExternalLink, Users, Mail, LogOut, Palette } f
 import { useRouter } from 'next/navigation'
 import type { LandingPage } from '@/lib/supabase'
 import { getTemplateElements, getAvailableTemplates, type TemplateInfo } from '@/lib/store'
+import { TemplatePreview } from '@/components/TemplatePreview'
 
 export function Dashboard() {
   const { user, signOut } = useAuth()
@@ -219,8 +220,8 @@ export function Dashboard() {
                       }}
                     >
                       <CardHeader className="p-4">
-                        <div className="aspect-video bg-gray-100 rounded-lg mb-3 flex items-center justify-center">
-                          <div className="text-gray-400 text-sm">Preview</div>
+                        <div className="mb-3">
+                          <TemplatePreview template={template} />
                         </div>
                         <CardTitle className="text-lg">{template.name}</CardTitle>
                         <p className="text-sm text-gray-600">{template.description}</p>
