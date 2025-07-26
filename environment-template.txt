@@ -5,8 +5,11 @@
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
-# Optional: Service Role Key for server-side operations
-# SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+# Service Role Key for server-side operations (Required for email testing)
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+
+# Site URL for email redirects
+NEXT_PUBLIC_SITE_URL=https://squpage.com
 
 # Instructions:
 # 1. Copy this file to .env.local
